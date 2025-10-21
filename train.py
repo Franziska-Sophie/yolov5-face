@@ -288,7 +288,7 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
         shuffle=True,
         # rank=opt.local_rank,
         frame_skip=10,
-        # cache_images="ram",
+        cache_images=True,
     )
     dataset = train_loader.dataset
     mlc = np.concatenate(dataset.labels, 0)[:, 0].max()  # max label class
@@ -309,7 +309,7 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
             workers=opt.workers,
             shuffle=False,
             frame_skip=10,
-            # cache_images="ram",
+            cache_images=True,
         )
         # create_dataloader(
         #     test_path,
