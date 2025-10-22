@@ -103,14 +103,14 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
     train_path = data_dict["train"]
     test_path = data_dict["val"]
     train_videos = Path(data_dict["path"]) / "cabin_footage/training_data"
-    train_labels = Path(data_dict["path"]) / "annotations" / "yolo_train"
-    val_labels = Path(data_dict["path"]) / "annotations" / "yolo_val"
-    print(train_path)
-    print(test_path)
-    print(opt.data)
-    print(train_videos)
-    print(train_labels)
-    print(val_labels)
+    # train_labels = Path(data_dict["path"]) / "annotations" / "yolo_val"  # "yolo_train"
+    # val_labels = Path(data_dict["path"]) / "annotations" / "yolo_val"
+    # print(train_path)
+    # print(test_path)
+    # print(opt.data)
+    # print(train_videos)
+    # print(train_labels)
+    # print(val_labels)
     nc = 1 if opt.single_cls else int(data_dict["nc"])  # number of classes
     names = (
         ["item"]
@@ -281,13 +281,13 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
 
     train_loader = create_video_yolo_dataloader(
         video_root=train_videos,
-        label_root=train_labels,
+        label_root=train_path,
         imgsz=imgsz,
         batch_size=batch_size // opt.world_size,
         workers=opt.workers,
         shuffle=True,
         # rank=opt.local_rank,
-        frame_skip=10,
+        frame_skip=1,
         cache_images=True,
     )
     dataset = train_loader.dataset
@@ -303,12 +303,12 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
         ema.updates = start_epoch * nb // accumulate  # set EMA updates
         testloader = create_video_yolo_dataloader(
             video_root=train_videos,
-            label_root=val_labels,
+            label_root=test_path,
             imgsz=imgsz,
             batch_size=batch_size,
             workers=opt.workers,
             shuffle=False,
-            frame_skip=10,
+            frame_skip=1,
             cache_images=True,
         )
         # create_dataloader(

@@ -347,7 +347,9 @@ def xywhn2xyxy(x, w=640, h=640, padw=32, padh=32):
 
 def scale_coords(img1_shape, coords, img0_shape, ratio_pad=None):
     # Rescale coords (xyxy) from img1_shape to img0_shape
-    if ratio_pad is None:  # calculate from img0_shape
+    if ratio_pad is None or (
+        len(ratio_pad) > 1 and type(ratio_pad[0]) is not list
+    ):  # calculate from img0_shape
         gain = min(
             img1_shape[0] / img0_shape[0], img1_shape[1] / img0_shape[1]
         )  # gain  = old / new
@@ -698,7 +700,7 @@ def strip_optimizer(
     f="weights/best.pt", s=""
 ):  # from utils.general import *; strip_optimizer()
     # Strip optimizer from 'f' to finalize training, optionally save as 's'
-    x = torch.load(f, map_location=torch.device("cpu"))
+    x = torch.load(f, map_location=torch.device("cpu"), weights_only=False)
     for key in "optimizer", "training_results", "wandb_id":
         x[key] = None
     x["epoch"] = -1

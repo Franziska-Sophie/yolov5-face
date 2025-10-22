@@ -61,11 +61,13 @@ class VideoYOLODataset(Dataset):
         with ThreadPool(NUM_THREADS) as pool:
             results = list(
                 tqdm.tqdm(
-                    pool.imap(self._load_video, self.index.items()),
+                    pool.imap_unordered(
+                        lambda i_v: self._load_video(i_v[1], position=i_v[0]),
+                        enumerate(self.index.items()),
+                    ),
                     total=len(self.index),
-                    desc="Parallel video loading",
+                    desc="🎬 Preloading videos",
                     ncols=100,
-                    unit="video",
                 )
             )
 
@@ -78,7 +80,11 @@ class VideoYOLODataset(Dataset):
             self.labels.extend(labels)
             self.shapes.extend([(self.img_size, self.img_size)] * len(frames))
 
-        # Convert to numpy
+        self.frame_shapes = [
+            ((self.img_size, self.img_size), (self.img_size, self.img_size))
+            for _ in range(len(self.index))
+        ]
+
         self.shapes = np.array(self.shapes, dtype=np.float32)
 
         # Global shuffle for training randomness
@@ -96,8 +102,10 @@ class VideoYOLODataset(Dataset):
     # ----------------------------
     #   VIDEO LOADING FUNCTION
     # ----------------------------
-    def _load_video(self, video_item):
-        """Load all frames from one video sequentially, resize, normalize, and parse labels."""
+    def _load_video(self, video_item, position=0):
+        """
+        Load all frames from one video sequentially, with a per-video progress bar.
+        """
         video_path, frame_items = video_item
         frames, labels = [], []
 
@@ -109,10 +117,24 @@ class VideoYOLODataset(Dataset):
         # Sort frames for sequential access
         frame_items.sort(key=lambda x: x[1])
 
+        total_frames = len(frame_items)
+        video_name = Path(video_path).name
+
+        # tqdm progress bar for this video
+        pbar = tqdm.tqdm(
+            total=total_frames,
+            desc=f"🎞️ Loading {video_name}",
+            position=position,  # ensures unique row per video when run in parallel
+            leave=False,  # keep console clean after completion
+            ncols=100,
+            dynamic_ncols=True,
+        )
+
         for _, frame_id, label_file in frame_items:
             cap.set(cv2.CAP_PROP_POS_FRAMES, frame_id)
             ret, frame = cap.read()
             if not ret:
+                pbar.update(1)
                 continue
 
             # Resize + normalize
@@ -139,7 +161,9 @@ class VideoYOLODataset(Dataset):
                 frame_labels = np.zeros((0, 15), dtype=np.float32)
 
             labels.append(frame_labels)
+            pbar.update(1)
 
+        pbar.close()
         cap.release()
         return frames, labels
 
@@ -203,54 +227,6 @@ class VideoYOLODataset(Dataset):
 
         return frame, targets
 
-    # def __getitem__(self, idx):
-    #     _, _, label_path = self.index[idx]
-    #     frame = self.frames[idx]
-
-    #     # cap = cv2.VideoCapture(str(video_path))
-    #     # cap.set(cv2.CAP_PROP_POS_FRAMES, frame_id)
-    #     # ret, frame = cap.read()
-    #     # cap.release()
-
-    #     # if not ret:
-    #     #     raise RuntimeError(f"❌ Could not read frame {frame_id} from {video_path}")
-
-    #     # # Resize and normalize
-    #     # frame = cv2.resize(frame, (self.img_size, self.img_size))
-    #     # frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    #     # frame = frame.transpose(2, 0, 1) / 255.0
-    #     # frame = torch.tensor(frame, dtype=torch.float32)
-
-    #     # Load YOLO-format labels (class x_center y_center width height)
-    #     targets = []
-    #     if os.path.exists(label_path):
-    #         with open(label_path, "r") as f:
-    #             lines = f.readlines()
-
-    #         frame_labels = []
-    #         for line in lines:
-    #             parts = list(map(float, line.strip().split()))
-
-    #             # If only bbox (5 values: class, x, y, w, h), pad with 10 dummy landmark coords
-    #             if len(parts) == 5:
-    #                 parts += [0.0] * 10  # add x1 y1 ... x5 y5 = zeros
-
-    #             frame_labels.append(parts)
-
-    #         frame_labels = np.array(frame_labels, dtype=np.float32)
-    #         self.labels.append(frame_labels)
-    #     targets = (
-    #         torch.tensor(targets, dtype=torch.float32)
-    #         if len(targets) > 0
-    #         else torch.zeros((0, 15))
-    #     )
-
-    #     # Optionally apply transforms
-    #     if self.transform:
-    #         frame, targets = self.transform(frame, targets)
-
-    #     return frame, targets
-
 
 def yolo_video_collate(batch):
     """
@@ -262,19 +238,23 @@ def yolo_video_collate(batch):
     for i, (img, target) in enumerate(batch):
         imgs.append(img)
         paths.append(f"video_frame_{i}")  # arbitrary frame identifier
-        shapes.append(torch.tensor(img.shape[1:], dtype=torch.float32))  # H,W
+
+        # Get current shape (H, W)
+        h, w = img.shape[1], img.shape[2]
+
+        # Fake original and resized shapes (YOLO expects a tuple of tuples)
+        shapes.append(((h, w), (h, w)))
 
         if target.numel() > 0:
             b = torch.full((target.shape[0], 1), i)  # batch index
             targets.append(torch.cat((b, target), dim=1))
 
     imgs = torch.stack(imgs, 0)
+
     if targets:
         targets = torch.cat(targets, 0)
     else:
         targets = torch.zeros((0, 16))
-
-    shapes = torch.stack(shapes, 0)  # [B,2]
 
     return imgs, targets, paths, shapes
 
