@@ -51,6 +51,7 @@ def test(
     save_conf=False,  # save auto-label confidences
     plots=True,
     log_imgs=0,
+    workers=4,
 ):  # number of logged images
     # Initialize/load model and set device
     training = model is not None
@@ -110,15 +111,16 @@ def test(
         )  # path to val/test images
         # dataloader = create_dataloader(path, imgsz, batch_size, model.stride.max(), opt, pad=0.5, rect=True)[0]
 
-        train_videos = Path(data["path"]) / "cabin_footage/training_data"
+        test_videos = Path(data["path"]) / "cabin_footage/test_data"
         dataloader = create_video_yolo_dataloader(
-            video_root=train_videos,
+            video_root=test_videos,
             label_root=path,
             imgsz=imgsz,
             batch_size=batch_size,
-            workers=opt.workers,
+            workers=workers,
             shuffle=False,
             cache_images=True,
+            frame_skip=300,
         )
 
     seen = 0
@@ -476,6 +478,9 @@ if __name__ == "__main__":
         action="store_true",
         help="existing project/name ok, do not increment",
     )
+    parser.add_argument(
+        "--workers", type=int, default=4, help="maximum number of dataloader workers"
+    )
     opt = parser.parse_args()
     opt.save_json |= opt.data.endswith("coco.yaml")
     opt.data = check_file(opt.data)  # check file
@@ -496,6 +501,7 @@ if __name__ == "__main__":
             save_txt=opt.save_txt | opt.save_hybrid,
             save_hybrid=opt.save_hybrid,
             save_conf=opt.save_conf,
+            workers=opt.workers,
         )
 
     elif opt.task == "study":  # run over a range of settings and save/plot
