@@ -52,10 +52,12 @@ class VideoYOLODataset(Dataset):
         self.transform = transform
         self.cache_images = cache_images
 
-        # Build index: mapping video -> [(video_path, frame_id, label_path), ...]
-        self.index = self._build_video_index()
+        print(video_root, label_root)
 
-        print(f"⚙️ Preloading frames from {len(self.index)} videos into RAM...")
+        # Build index: mapping video -> [(video_path, frame_id, label_path), ...]
+        self.video_index, self.index = self._build_indexes()
+
+        print(f"⚙️ Preloading frames from {len(self.video_index)} videos into RAM...")
 
         # Parallel video loading
         with ThreadPool(NUM_THREADS) as pool:
@@ -63,9 +65,9 @@ class VideoYOLODataset(Dataset):
                 tqdm.tqdm(
                     pool.imap_unordered(
                         lambda i_v: self._load_video(i_v[1], position=i_v[0]),
-                        enumerate(self.index.items()),
+                        enumerate(self.video_index.items()),
                     ),
-                    total=len(self.index),
+                    total=len(self.video_index),
                     desc="🎬 Preloading videos",
                     ncols=100,
                 )
@@ -80,11 +82,6 @@ class VideoYOLODataset(Dataset):
             self.labels.extend(labels)
             self.shapes.extend([(self.img_size, self.img_size)] * len(frames))
 
-        self.frame_shapes = [
-            ((self.img_size, self.img_size), (self.img_size, self.img_size))
-            for _ in range(len(self.index))
-        ]
-
         self.shapes = np.array(self.shapes, dtype=np.float32)
 
         # Global shuffle for training randomness
@@ -96,7 +93,7 @@ class VideoYOLODataset(Dataset):
         self.shapes = np.array(self.shapes, dtype=np.float32)
 
         print(
-            f"✅ Cached {len(self.frames)} frames from {len(self.index)} videos using {NUM_THREADS} threads."
+            f"✅ Cached {len(self.index)} frames from {len(self.video_index)} videos using {NUM_THREADS} threads."
         )
 
     # ----------------------------
@@ -139,6 +136,7 @@ class VideoYOLODataset(Dataset):
 
             # Resize + normalize
             frame = cv2.resize(frame, (self.img_size, self.img_size))
+
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             frame = frame.transpose(2, 0, 1) / 255.0
             frame = torch.tensor(frame, dtype=torch.float32)
@@ -153,8 +151,21 @@ class VideoYOLODataset(Dataset):
                 frame_labels = []
                 for line in lines:
                     parts = list(map(float, line.strip().split()))
+                    xc = parts[1]
+                    yc = parts[2]
                     if len(parts) == 5:
-                        parts += [0.0] * 10  # add dummy landmarks
+                        parts += [
+                            xc,
+                            yc,
+                            xc,
+                            yc,
+                            xc,
+                            yc,
+                            xc,
+                            yc,
+                            xc,
+                            yc,
+                        ]  # add dummy landmarks
                     frame_labels.append(parts)
                 frame_labels = np.array(frame_labels, dtype=np.float32)
             else:
@@ -170,9 +181,10 @@ class VideoYOLODataset(Dataset):
     # ----------------------------
     #   INDEX BUILDER
     # ----------------------------
-    def _build_video_index(self):
+    def _build_indexes(self):
         """Build a mapping from each video file to its frame list."""
         video_index = {}
+        index = []
         video_files = sorted(
             [
                 f
@@ -203,8 +215,9 @@ class VideoYOLODataset(Dataset):
                     video_index.setdefault(video_path, []).append(
                         (video_path, frame_id, label_file)
                     )
+                    index.append((video_path, frame_id, label_file))
 
-        return video_index
+        return video_index, index
 
     def __len__(self):
         return len(self.index)
@@ -224,6 +237,31 @@ class VideoYOLODataset(Dataset):
         # Apply optional transforms (e.g., augmentations)
         if self.transform:
             frame, targets = self.transform(frame, targets)
+
+        # if frame_labels.shape[0] > 0:
+        #     img = np.array(frame)
+        #     img = img.transpose(1, 2, 0) * 255.0
+        #     h, w = img.shape[:2]
+        #     print(h, w, frame_labels.shape)
+        #     for lbl in frame_labels:
+        #         _, xc, yc, bw, bh = lbl[:5]
+        #         x1 = int((xc - bw / 2) * w)
+        #         y1 = int((yc - bh / 2) * h)
+        #         x2 = int((xc + bw / 2) * w)
+        #         y2 = int((yc + bh / 2) * h)
+        #         cv2.rectangle(img, (x1, y1), (x2, y2), (0, 255, 0), 2)
+
+        #         landmarks = lbl[5:].reshape(-1, 2)
+        #         for lx, ly in landmarks:
+        #             lx = int(lx * w)
+        #             ly = int(ly * h)
+        #             cv2.circle(img, (lx, ly), 2, (0, 0, 255), -1)
+
+        #     save_dir = Path("debug_frames")
+        #     save_dir.mkdir(exist_ok=True)
+        #     save_path = save_dir / f"frame{idx}.png"
+        #     cv2.imwrite(str(save_path), img)
+        #     print(f"🖼️ Saved debug frame with boxes → {save_path}")
 
         return frame, targets
 
