@@ -92,8 +92,9 @@ class VideoYOLODataset(Dataset):
         self.labels = list(self.labels)
         self.shapes = np.array(self.shapes, dtype=np.float32)
 
+        total_labels = sum(len(lbl) for lbl in self.labels)
         print(
-            f"✅ Cached {len(self.index)} frames from {len(self.video_index)} videos using {NUM_THREADS} threads."
+            f"✅ Cached {len(self.index)} frames with {total_labels} bounding boxes from {len(self.video_index)} videos using {NUM_THREADS} threads."
         )
 
     # ----------------------------
