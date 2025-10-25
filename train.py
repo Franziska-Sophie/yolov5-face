@@ -617,7 +617,7 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
                 torch.save(ckpt, last)
                 if best_fitness == fi:
                     torch.save(ckpt, best)
-                    print(f"---------> New best in epoch: {epoch}")
+                    print(f"---------> New best epoch: {epoch}")
                 del ckpt
         # end epoch ----------------------------------------------------------------------------------------------------
     # end training
