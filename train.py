@@ -287,7 +287,7 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
         workers=opt.workers,
         shuffle=True,
         # rank=opt.local_rank,
-        frame_skip=1,
+        frame_skip=opt.frame_skip,
         cache_images=True,
     )
     dataset = train_loader.dataset
@@ -308,7 +308,7 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
             batch_size=batch_size,
             workers=opt.workers,
             shuffle=False,
-            frame_skip=1,
+            frame_skip=opt.frame_skip,
             cache_images=True,
         )
         # create_dataloader(
@@ -617,6 +617,7 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
                 torch.save(ckpt, last)
                 if best_fitness == fi:
                     torch.save(ckpt, best)
+                    print(f"---------> New best in epoch: {epoch}")
                 del ckpt
         # end epoch ----------------------------------------------------------------------------------------------------
     # end training
@@ -774,6 +775,12 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--workers", type=int, default=4, help="maximum number of dataloader workers"
+    )
+    parser.add_argument(
+        "--frame-skip",
+        type=int,
+        default=1,
+        help="only include every x frame in the data",
     )
     parser.add_argument("--project", default="runs/train", help="save to project/name")
     parser.add_argument("--name", default="exp", help="save to project/name")
