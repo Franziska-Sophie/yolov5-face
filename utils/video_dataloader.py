@@ -136,10 +136,24 @@ class VideoYOLODataset(Dataset):
                 continue
 
             # Resize + normalize
-            frame = cv2.resize(frame, (self.img_size, self.img_size))
+            h0, w0 = frame.shape[:2]
+            r = self.img_size / max(h0, w0)
+            if r <= 1:
+                frame = cv2.resize(
+                    frame, (int(w0 * r), int(h0 * r)), interpolation=cv2.INTER_AREA
+                )
+            else:
+                raise ValueError(
+                    f"The requested image size ({self.img_size}) is larger than the original image size {(w0, h0)}."
+                )
 
+            h_resized, w_resized = frame.shape[:2]
+
+            frame, (dw, dh) = letterbox(
+                frame, self.img_size
+            )  # add padding to make image square
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            frame = frame.transpose(2, 0, 1) / 255.0
+            frame = frame.transpose(2, 0, 1)  # / 255.0
             frame = torch.tensor(frame, dtype=torch.float32)
 
             if self.cache_images:
@@ -152,8 +166,12 @@ class VideoYOLODataset(Dataset):
                 frame_labels = []
                 for line in lines:
                     parts = list(map(float, line.strip().split()))
-                    xc = parts[1]
-                    yc = parts[2]
+                    c, xc, yc, w, h = parts[:5]
+                    xc = (xc * w_resized + dw) / self.img_size
+                    yc = (yc * h_resized + dh) / self.img_size
+                    w = w * w_resized / self.img_size
+                    h = h * h_resized / self.img_size
+                    parts[:5] = [c, xc, yc, w, h]
                     if len(parts) == 5:
                         parts += [
                             xc,
@@ -241,9 +259,9 @@ class VideoYOLODataset(Dataset):
 
         # if frame_labels.shape[0] > 0:
         #     img = np.array(frame)
-        #     img = img.transpose(1, 2, 0) * 255.0
+        #     img = img.transpose(1, 2, 0)  # * 255.0
+        #     img = cv2.cvtColor(img, cv2.COLOR_RGB2BGR)
         #     h, w = img.shape[:2]
-        #     print(h, w, frame_labels.shape)
         #     for lbl in frame_labels:
         #         _, xc, yc, bw, bh = lbl[:5]
         #         x1 = int((xc - bw / 2) * w)
@@ -296,6 +314,24 @@ def yolo_video_collate(batch):
         targets = torch.zeros((0, 16))
 
     return imgs, targets, paths, shapes
+
+
+def letterbox(img, new_shape=(640, 640), color=(114, 114, 114)):
+    shape = img.shape[:2]
+    if isinstance(new_shape, int):
+        new_shape = (new_shape, new_shape)
+
+    # Compute padding
+    dh, dw = new_shape[0] - shape[0], new_shape[1] - shape[1]  # wh padding
+    dw /= 2  # divide padding into 2 sides
+    dh /= 2
+
+    top, bottom = int(round(dh - 0.1)), int(round(dh + 0.1))
+    left, right = int(round(dw - 0.1)), int(round(dw + 0.1))
+    img = cv2.copyMakeBorder(
+        img, top, bottom, left, right, cv2.BORDER_CONSTANT, value=color
+    )  # add border
+    return img, (dw, dh)
 
 
 def create_video_yolo_dataloader(
