@@ -52,6 +52,7 @@ def test(
     plots=True,
     log_imgs=0,
     workers=4,
+    frame_skip=1,
 ):  # number of logged images
     # Initialize/load model and set device
     training = model is not None
@@ -120,7 +121,7 @@ def test(
             workers=workers,
             shuffle=False,
             cache_images=True,
-            frame_skip=300,
+            frame_skip=frame_skip,
         )
 
     seen = 0
@@ -481,6 +482,12 @@ if __name__ == "__main__":
     parser.add_argument(
         "--workers", type=int, default=4, help="maximum number of dataloader workers"
     )
+    parser.add_argument(
+        "--frame-skip",
+        type=int,
+        default=1,
+        help="only include every x frame in the data",
+    )
     opt = parser.parse_args()
     opt.save_json |= opt.data.endswith("coco.yaml")
     opt.data = check_file(opt.data)  # check file
@@ -502,6 +509,7 @@ if __name__ == "__main__":
             save_hybrid=opt.save_hybrid,
             save_conf=opt.save_conf,
             workers=opt.workers,
+            frame_skip=opt.frame_skip,
         )
 
     elif opt.task == "study":  # run over a range of settings and save/plot
@@ -523,6 +531,7 @@ if __name__ == "__main__":
                     opt.iou_thres,
                     opt.save_json,
                     plots=False,
+                    frame_skip=opt.frame_skip,
                 )
                 y.append(r + t)  # results and times
             np.savetxt(f, y, fmt="%10.4g")  # save
