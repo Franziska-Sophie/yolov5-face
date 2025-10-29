@@ -43,6 +43,7 @@ class VideoYOLODataset(Dataset):
         sample_frames=None,
         transform=None,
         cache_images=True,
+        hyp=None,
     ):
         self.video_root = Path(video_root)
         self.label_root = Path(label_root)
@@ -51,6 +52,7 @@ class VideoYOLODataset(Dataset):
         self.sample_frames = sample_frames
         self.transform = transform
         self.cache_images = cache_images
+        self.hyp = hyp
 
         print(video_root, label_root)
 
@@ -153,6 +155,10 @@ class VideoYOLODataset(Dataset):
                 frame, self.img_size
             )  # add padding to make image square
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+
+            fliplr_random = random.random()
+            if fliplr_random < self.hyp["fliplr"]:  # flip left right
+                frame = np.fliplr(frame).copy()
             frame = frame.transpose(2, 0, 1)  # / 255.0
             frame = torch.tensor(frame, dtype=torch.float32)
 
@@ -186,7 +192,10 @@ class VideoYOLODataset(Dataset):
                             yc,
                         ]  # add dummy landmarks
                     frame_labels.append(parts)
+                nL = len(frame_labels)  # number of frame_labels
                 frame_labels = np.array(frame_labels, dtype=np.float32)
+                if nL and fliplr_random < self.hyp["fliplr"]:
+                    frame_labels[:, 1] = 1 - frame_labels[:, 1]
             else:
                 frame_labels = np.zeros((0, 15), dtype=np.float32)
 
@@ -344,6 +353,7 @@ def create_video_yolo_dataloader(
     sample_frames=None,
     shuffle=True,
     cache_images=False,
+    hyp=None,
 ):
     dataset = VideoYOLODataset(
         video_root=video_root,
@@ -352,6 +362,7 @@ def create_video_yolo_dataloader(
         frame_skip=frame_skip,
         sample_frames=sample_frames,
         cache_images=cache_images,
+        hyp=hyp,
     )
     return DataLoader(
         dataset,
