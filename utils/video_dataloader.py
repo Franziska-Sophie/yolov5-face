@@ -196,6 +196,8 @@ class VideoYOLODataset(Dataset):
                     frame_labels.append(parts)
                 nL = len(frame_labels)  # number of frame_labels
                 frame_labels = np.array(frame_labels, dtype=np.float32)
+                if frame_labels.ndim == 1:
+                    frame_labels = frame_labels.reshape(-1, 15)
                 if nL and fliplr_random < self.hyp["fliplr"]:
                     frame_labels[:, 1] = 1 - frame_labels[:, 1]
             else:
