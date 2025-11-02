@@ -101,8 +101,9 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
     # with torch_distributed_zero_first(rank):
     #     check_dataset(data_dict)  # check
     train_path = data_dict["train"]
-    test_path = data_dict["val"]
-    train_videos = Path(data_dict["path"]) / "cabin_footage/training_data"
+    val_path = data_dict["val"]
+    train_videos = Path(data_dict["path"]) / Path(data_dict["train_vids"])
+    val_videos = Path(data_dict["path"]) / Path(data_dict["val_vids"])
     # train_labels = Path(data_dict["path"]) / "annotations" / "yolo_val"  # "yolo_train"
     # val_labels = Path(data_dict["path"]) / "annotations" / "yolo_val"
     # print(train_path)
@@ -302,9 +303,9 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
     # Process 0
     if rank in [-1, 0]:
         ema.updates = start_epoch * nb // accumulate  # set EMA updates
-        testloader = create_video_yolo_dataloader(
-            video_root=train_videos,
-            label_root=test_path,
+        valloader = create_video_yolo_dataloader(
+            video_root=val_videos,
+            label_root=val_path,
             imgsz=imgsz,
             batch_size=batch_size,
             workers=opt.workers,
@@ -556,7 +557,7 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
                     imgsz=imgsz_test,
                     model=ema.ema,
                     single_cls=opt.single_cls,
-                    dataloader=testloader,
+                    dataloader=valloader,
                     save_dir=save_dir,
                     plots=False,
                     log_imgs=opt.log_imgs if wandb else 0,
@@ -674,7 +675,7 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
                     iou_thres=iou,
                     model=attempt_load(final, device).half(),
                     single_cls=opt.single_cls,
-                    dataloader=testloader,
+                    dataloader=valloader,
                     save_dir=save_dir,
                     save_json=save_json,
                     plots=False,
