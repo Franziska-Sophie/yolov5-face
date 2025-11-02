@@ -66,7 +66,9 @@ class VideoYOLODataset(Dataset):
             results = list(
                 tqdm.tqdm(
                     pool.imap_unordered(
-                        lambda i_v: self._load_video(i_v[1], position=i_v[0]),
+                        lambda i_v: self._load_video(
+                            i_v[1], position=(i_v[0] % 20 + 1)
+                        ),
                         enumerate(self.video_index.items()),
                     ),
                     total=len(self.video_index),
