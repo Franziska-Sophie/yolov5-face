@@ -159,8 +159,9 @@ class VideoYOLODataset(Dataset):
             frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
             fliplr_random = random.random()
-            if fliplr_random < self.hyp["fliplr"]:  # flip left right
-                frame = np.fliplr(frame).copy()
+            if self.hyp:
+                if fliplr_random < self.hyp["fliplr"]:  # flip left right
+                    frame = np.fliplr(frame).copy()
             frame = frame.transpose(2, 0, 1)  # / 255.0
             frame = torch.tensor(frame, dtype=torch.float32)
 
@@ -198,8 +199,9 @@ class VideoYOLODataset(Dataset):
                 frame_labels = np.array(frame_labels, dtype=np.float32)
                 if frame_labels.ndim == 1:
                     frame_labels = frame_labels.reshape(-1, 15)
-                if nL and fliplr_random < self.hyp["fliplr"]:
-                    frame_labels[:, 1] = 1 - frame_labels[:, 1]
+                if self.hyp:
+                    if nL and fliplr_random < self.hyp["fliplr"]:
+                        frame_labels[:, 1] = 1 - frame_labels[:, 1]
             else:
                 frame_labels = np.zeros((0, 15), dtype=np.float32)
 
