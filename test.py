@@ -112,7 +112,7 @@ def test(
         )  # path to val/test images
         # dataloader = create_dataloader(path, imgsz, batch_size, model.stride.max(), opt, pad=0.5, rect=True)[0]
 
-        test_videos = Path(data["path"]) / "cabin_footage/test_data"
+        test_videos = Path(data["path"]) / Path(data["test_vids"])
         dataloader = create_video_yolo_dataloader(
             video_root=test_videos,
             label_root=path,
