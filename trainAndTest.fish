@@ -24,21 +24,6 @@ uv run test.py \
     --verbose \
     --save-txt \
     --save-conf \
-    --frame-skip 17 \
-    --img-size 960 \
-    --workers 8 \
-    --batch-size 48 \
-    --single-cls \
-    --data ../cabin-pre-annotations/annotations/yolo_dataset_synth.yaml \
-    --weights runs/train/experiment_"$experiment_id"/weights/best.pt \
-    --name "experiment_"$experiment_id"_test_synth"
-
-uv run test.py \
-    --task "test" \
-    --device 0 \
-    --verbose \
-    --save-txt \
-    --save-conf \
     --frame-skip 10 \
     --img-size 960 \
     --workers 8 \
@@ -47,3 +32,18 @@ uv run test.py \
     --data ../cabin-pre-annotations/annotations/yolo_dataset.yaml \
     --weights runs/train/experiment_"$experiment_id"/weights/best.pt \
     --name "experiment_"$experiment_id"_test_real"
+
+uv run test.py \
+    --task "test" \
+    --device 0 \
+    --verbose \
+    --save-txt \
+    --save-conf \
+    --frame-skip 17 \
+    --img-size 960 \
+    --workers 8 \
+    --batch-size 48 \
+    --single-cls \
+    --data ../cabin-pre-annotations/annotations/yolo_dataset_synth.yaml \
+    --weights runs/train/experiment_"$experiment_id"/weights/best.pt \
+    --name "experiment_"$experiment_id"_test_synth"
