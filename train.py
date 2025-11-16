@@ -98,12 +98,23 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
     init_seeds(2 + rank)
     with open(opt.data) as f:
         data_dict = yaml.load(f, Loader=yaml.FullLoader)  # data dict
+    data_dict_2 = None
+    if opt.data2 != "":
+        with open(opt.data2) as f:
+            data_dict_2 = yaml.load(f, Loader=yaml.FullLoader)
     # with torch_distributed_zero_first(rank):
     #     check_dataset(data_dict)  # check
     train_path = data_dict["train"]
     val_path = data_dict["val"]
     train_videos = Path(data_dict["path"]) / Path(data_dict["train_vids"])
     val_videos = Path(data_dict["path"]) / Path(data_dict["val_vids"])
+
+    train_path_2 = val_path_2 = train_videos_2 = val_videos_2 = None
+    if data_dict_2:
+        train_path_2 = data_dict_2["train"]
+        val_path_2 = data_dict_2["val"]
+        train_videos_2 = Path(data_dict_2["path"]) / Path(data_dict_2["train_vids"])
+        val_videos_2 = Path(data_dict_2["path"]) / Path(data_dict_2["val_vids"])
     # train_labels = Path(data_dict["path"]) / "annotations" / "yolo_val"  # "yolo_train"
     # val_labels = Path(data_dict["path"]) / "annotations" / "yolo_val"
     # print(train_path)
@@ -291,6 +302,9 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
         frame_skip=opt.frame_skip,
         cache_images=True,
         hyp=hyp,
+        video_root_2=train_videos_2,
+        label_root_2=train_path_2,
+        frame_skip_2=opt.frame_skip_2,
     )
     dataset = train_loader.dataset
     mlc = np.concatenate(dataset.labels, 0)[:, 0].max()  # max label class
@@ -313,6 +327,9 @@ def train(hyp, opt, device, tb_writer=None, wandb=None):
             frame_skip=opt.frame_skip,
             cache_images=True,
             hyp=hyp,
+            video_root_2=val_videos_2,
+            label_root_2=val_path_2,
+            frame_skip_2=opt.frame_skip_2,
         )
         # create_dataloader(
         #     test_path,
@@ -701,6 +718,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--data", type=str, default="data/widerface.yaml", help="data.yaml path"
     )
+    parser.add_argument("--data2", type=str, default="", help="data.yaml path")
     parser.add_argument(
         "--hyp", type=str, default="data/hyp.scratch.yaml", help="hyperparameters path"
     )
@@ -783,6 +801,12 @@ if __name__ == "__main__":
         "--frame-skip",
         type=int,
         default=1,
+        help="only include every x frame in the data",
+    )
+    parser.add_argument(
+        "--frame-skip-2",
+        type=int,
+        default=None,
         help="only include every x frame in the data",
     )
     parser.add_argument("--project", default="runs/train", help="save to project/name")

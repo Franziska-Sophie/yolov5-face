@@ -349,6 +349,108 @@ def letterbox(img, new_shape=(640, 640), color=(114, 114, 114)):
     return img, (dw, dh)
 
 
+class CombinedVideoDataset(Dataset):
+    """
+    Combine multiple VideoYOLODataset instances into a single dataset object
+    that exposes the same attributes your training code expects:
+      - labels (list of np.arrays)
+      - shapes (np.array)
+      - frames (list of torch tensors) or loaded on demand
+      - index (list of triplets)
+    and implements __len__ and __getitem__.
+    """
+
+    def __init__(self, datasets):
+        # datasets: list of VideoYOLODataset instances
+        assert isinstance(datasets, (list, tuple)) and len(datasets) > 0
+
+        self.datasets = datasets
+
+        # concatenate frames / labels / shapes / index
+        # Note: some datasets may not have frames cached (None); we keep whatever they have.
+        self.frames = []
+        self.labels = []
+        self.shapes = []
+        self.index = []
+
+        for ds in datasets:
+            # prefer explicit attributes if they exist
+            if hasattr(ds, "frames"):
+                self.frames.extend(ds.frames)
+            else:
+                # fallback: build placeholder Nones for length
+                self.frames.extend([None] * len(ds))
+
+            if hasattr(ds, "labels"):
+                self.labels.extend(ds.labels)
+            else:
+                # try to read labels via indexing (slower)
+                self.labels.extend([None] * len(ds))
+
+            if hasattr(ds, "shapes"):
+                # shapes might be numpy array or list
+                self.shapes.extend(list(ds.shapes))
+            else:
+                self.shapes.extend([(ds.img_size, ds.img_size)] * len(ds))
+
+            if hasattr(ds, "index"):
+                self.index.extend(ds.index)
+            else:
+                # if underlying ds doesn't have index, create dummy entries
+                self.index.extend([(None, None, None)] * len(ds))
+
+        # shapes should be numpy array for compatibility with autoanchor etc.
+        import numpy as _np
+
+        self.shapes = _np.array(self.shapes, dtype=np.float32)
+
+        # book-keeping lengths
+        self.n = len(self.frames)
+        self._length = self.n
+
+    def __len__(self):
+        return self._length
+
+    def __getitem__(self, idx):
+        # pull from combined frames/labels lists
+        frame = self.frames[idx]
+        labels = self.labels[idx]
+
+        # if frame is None, try to fetch from underlying dataset by walking datasets (slow fallback)
+        if frame is None:
+            # compute which underlying dataset and local idx
+            running = 0
+            for ds in self.datasets:
+                if idx < running + len(ds):
+                    return ds[idx - running]
+                running += len(ds)
+            raise IndexError(idx)
+
+        # frame expected as torch tensor [3,H,W], labels as np array Nx15 or Nx5
+        import torch, numpy as np
+
+        if isinstance(labels, list):
+            labels = np.array(labels, dtype=np.float32)
+
+        targets = (
+            torch.tensor(labels, dtype=torch.float32)
+            if labels is not None and labels.size
+            else torch.zeros(
+                (
+                    0,
+                    labels.shape[1] if hasattr(labels, "shape") and labels.size else 15,
+                ),
+                dtype=torch.float32,
+            )
+        )
+
+        # optional transform
+        if hasattr(self, "transform") and self.transform:
+            frame, targets = self.transform(frame, targets)
+
+        return frame, targets
+
+
 def create_video_yolo_dataloader(
     video_root,
     label_root,
@@ -360,6 +462,9 @@ def create_video_yolo_dataloader(
     shuffle=True,
     cache_images=False,
     hyp=None,
+    video_root_2=None,
+    label_root_2=None,
+    frame_skip_2=None,
 ):
     dataset = VideoYOLODataset(
         video_root=video_root,
@@ -370,8 +475,26 @@ def create_video_yolo_dataloader(
         cache_images=cache_images,
         hyp=hyp,
     )
+    dataset_2 = None
+    if (
+        video_root_2 is not None
+        and label_root_2 is not None
+        and frame_skip_2 is not None
+    ):
+        dataset_2 = VideoYOLODataset(
+            video_root=video_root_2,
+            label_root=label_root_2,
+            img_size=imgsz,
+            frame_skip=frame_skip_2,
+            sample_frames=sample_frames,
+            cache_images=cache_images,
+            hyp=hyp,
+        )
+    mixed_dataset = dataset
+    if dataset_2 is not None:
+        mixed_dataset = CombinedVideoDataset([dataset, dataset_2])
     return DataLoader(
-        dataset,
+        mixed_dataset,
         batch_size=batch_size,
         shuffle=shuffle,
         num_workers=workers,
